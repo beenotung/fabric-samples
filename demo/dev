@@ -1,0 +1,36 @@
+#!/bin/bash
+set -e
+set -o pipefail
+
+fork () {
+  terminator -x "$@;read -p 'Press [Enter] to exit...'" &
+}
+
+docker rm `docker ps -a -q`
+
+# Term 1
+fork docker-compose -f docker-compose-simple.yaml up
+read -p "Press [Enter] to continue..."
+
+# Term 2
+code="""
+cd demo
+go build -o demo
+CORE_PEER_ADDRESS=peer:7051 CORE_CHAINCODE_ID_NAME=mycc:0 ./demo
+"""
+echo "$code" | xclip
+echo "$code" | xclip -sel clipboard
+echo "$code"
+fork docker exec -it chaincode bash
+
+read -p "Press [Enter] to continue..."
+
+# Term 3
+code="""
+peer chaincode install -p chaincodedev/chaincode/demo -n mycc -v 0
+peer chaincode instantiate -n mycc -v 0 -c '{"Args":["init","a","100","b","200"]}' -C myc
+"""
+echo "$code" | xclip
+echo "$code" | xclip -sel clipboard
+echo "$code"
+fork docker exec -it cli bash
