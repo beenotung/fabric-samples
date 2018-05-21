@@ -10,6 +10,16 @@ fork () {
   terminator -x "$@;read -p 'Press [Enter] to exit...'" &
 }
 
+# Setup Env
+pwd="$PWD"
+cd $(go env GOPATH)
+mkdir -p src/github.com/hyperledger
+cd src/github.com/hyperledger
+git clone https://github.com/hyperledger/fabric --depth 2
+cd "$pwd"
+bash ./../scripts/fabric-preload.sh
+
+# Clean up
 list=$(docker ps -a -q)
 if [ "$list" != "" ]; then
   docker rm ${list}
