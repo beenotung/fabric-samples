@@ -1,4 +1,8 @@
 #!/bin/bash
+
+sudo pacman -S --needed docker docker-compose terminator
+sudo systemctl start docker
+
 set -e
 set -o pipefail
 
@@ -6,7 +10,10 @@ fork () {
   terminator -x "$@;read -p 'Press [Enter] to exit...'" &
 }
 
-docker rm `docker ps -a -q`
+list=$(docker ps -a -q)
+if [ "$list" != "" ]; then
+  docker rm ${list}
+fi
 
 # Term 1
 fork docker-compose -f docker-compose-simple.yaml up
