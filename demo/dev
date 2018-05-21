@@ -1,8 +1,4 @@
 #!/bin/bash
-
-sudo pacman -S --needed docker docker-compose terminator
-sudo systemctl start docker
-
 set -e
 set -o pipefail
 
@@ -11,13 +7,20 @@ fork () {
 }
 
 # Setup Env
-pwd="$PWD"
-cd $(go env GOPATH)
-mkdir -p src/github.com/hyperledger
-cd src/github.com/hyperledger
-git clone https://github.com/hyperledger/fabric --depth 2
-cd "$pwd"
-bash ./../scripts/fabric-preload.sh
+if [ ! -f .setup ]; then
+  sudo pacman -S --needed docker docker-compose terminator
+  sudo systemctl start docker
+  pwd="$PWD"
+  cd $(go env GOPATH)
+  mkdir -p src/github.com/hyperledger
+  cd src/github.com/hyperledger
+  if [ ! -d fabric ]; then
+    git clone --depth 2 https://github.com/hyperledger/fabric
+  fi
+  cd "$pwd"
+  bash ./../scripts/fabric-preload.sh
+  touch .setup
+fi
 
 # Clean up
 list=$(docker ps -a -q)
