@@ -26,9 +26,15 @@ fork docker exec -it chaincode bash
 read -p "Press [Enter] to continue..."
 
 # Term 3
+##  peer chaincode install -p chaincodedev/chaincode/demo -n mycc -v 0
+##  peer chaincode instantiate -n mycc -v 0 -c '{"Args":["init","a","100","b","200"]}' -C myc
+##  peer chaincode invoke -n mycc -c '{"Args":["invoke","a","b","10"]}' -C myc
+##  peer chaincode query -n mycc -c '{"Args":["query","a"]}' -C myc
 code="""
 peer chaincode install -p chaincodedev/chaincode/demo -n mycc -v 0
-peer chaincode instantiate -n mycc -v 0 -c '{"Args":["init","a","100","b","200"]}' -C myc
+peer chaincode instantiate -n mycc -v 0 -c '{\"Args\":[\"init\",\"a\",\"100\",\"b\",\"200\"]}' -C myc
+peer chaincode invoke -n mycc -c '{\"Args\":[\"invoke\",\"a\",\"b\",\"10\"]}' -C myc
+peer chaincode query -n mycc -c '{\"Args\":[\"query\",\"a\"]}' -C myc
 """
 echo "$code" | xclip
 echo "$code" | xclip -sel clipboard
