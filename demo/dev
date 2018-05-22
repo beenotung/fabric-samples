@@ -9,7 +9,6 @@ fork () {
 # Setup Env
 if [ ! -f .setup ]; then
   sudo pacman -S --needed docker docker-compose terminator
-  sudo systemctl start docker
   pwd="$PWD"
   cd $(go env GOPATH)
   mkdir -p src/github.com/hyperledger
@@ -21,6 +20,12 @@ if [ ! -f .setup ]; then
   bash ./../scripts/fabric-preload.sh
   touch .setup
 fi
+set -e
+systemctl status docker
+if [ $? != 0 ]; then
+  sudo systemctl start docker
+fi
+set +e
 
 # Clean up
 list=$(docker ps -a -q)
