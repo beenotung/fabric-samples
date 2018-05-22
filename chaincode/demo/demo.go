@@ -28,7 +28,10 @@ import (
 
 	"github.com/hyperledger/fabric/core/chaincode/shim"
 	pb "github.com/hyperledger/fabric/protos/peer"
+	"encoding/json"
 )
+
+const KeyList = "_KEY_LIST_"
 
 // SimpleChaincode example simple Chaincode implementation
 type SimpleChaincode struct {
@@ -63,20 +66,35 @@ func (t *SimpleChaincode) Invoke(stub shim.ChaincodeStubInterface) pb.Response {
 	return shim.Error("Invalid invoke function name. Expecting {insert, update, key_search, value_search}.")
 }
 
-func (t *SimpleChaincode) insert(stub shim.ChaincodeStubInterface, args []string) pb.Response {
-	if len(args) != 2 {
-		return shim.Error("Incorrect number of arguments. Expecting 2")
+func (t *SimpleChaincode) keys(stub shim.ChaincodeStubInterface) (keyMap map[string]byte, err error) {
+	keyListBytes, err := stub.GetState(KeyList)
+	if err != nil {
+		return
 	}
-	key := args[0]
-	if len(key) == 0 {
-		return shim.Error("Invalid key, expecting non-empty string")
+	keyMap = make(map[string]byte)
+	if keyListBytes != nil {
+		err = json.Unmarshal(keyListBytes, &keyMap)
+		if err != nil {
+			return
+		}
 	}
-	oldValue, err := stub.GetState(key)
+	return
+}
+
+func (t *SimpleChaincode) set(stub shim.ChaincodeStubInterface, key string, value []byte) pb.Response {
+	keyMap, err := t.keys(stub)
+	if err != nil {
+		return shim.Error("Failed to decode key list: " + err.Error())
+	}
+	keyMap[key] = 0
+	keyListBytes, err := json.Marshal(keyMap)
+	if err != nil {
+		return shim.Error("Failed to encode key list: " + err.Error())
+	}
+	err = stub.PutState(KeyList, keyListBytes)
 	if err != nil {
 		return shim.Error(err.Error())
 	}
-	newValue := args[1]
-	value := append(oldValue, ";"+newValue...)
 	err = stub.PutState(key, value)
 	if err != nil {
 		return shim.Error(err.Error())
@@ -84,29 +102,51 @@ func (t *SimpleChaincode) insert(stub shim.ChaincodeStubInterface, args []string
 	return shim.Success(nil)
 }
 
-func (t *SimpleChaincode) update(stub shim.ChaincodeStubInterface, args []string) pb.Response {
+func (t *SimpleChaincode) insert(stub shim.ChaincodeStubInterface, args []string) pb.Response {
 	if len(args) != 2 {
-		return shim.Error("Incorrect number of arguments. Expecting 2")
+		return shim.Error("Incorrect number of arguments. Expecting 2.")
 	}
 	key := args[0]
-	if len(key) == 0 {
-		return shim.Error("Invalid key, expecting non-empty string")
+	if key == KeyList {
+		return shim.Error(fmt.Sprintf("Invalid key {%s} is preseved.", KeyList))
 	}
-	value := args[1]
-	err := stub.PutState(key, []byte (value))
+	if len(key) == 0 {
+		return shim.Error("Invalid key, expecting non-empty string.")
+	}
+	oldValue, err := stub.GetState(key)
 	if err != nil {
 		return shim.Error(err.Error())
 	}
-	return shim.Success(nil)
+	newValue := args[1]
+	value := append(oldValue, ";"+newValue...)
+	return t.set(stub, key, value)
+}
+
+func (t *SimpleChaincode) update(stub shim.ChaincodeStubInterface, args []string) pb.Response {
+	if len(args) != 2 {
+		return shim.Error("Incorrect number of arguments. Expecting 2.")
+	}
+	key := args[0]
+	if key == KeyList {
+		return shim.Error(fmt.Sprintf("Invalid key {%s} is preseved.", KeyList))
+	}
+	if len(key) == 0 {
+		return shim.Error("Invalid key, expecting non-empty string.")
+	}
+	value := args[1]
+	return t.set(stub, key, []byte(value))
 }
 
 func (t *SimpleChaincode) keySearch(stub shim.ChaincodeStubInterface, args []string) pb.Response {
 	if len(args) != 1 {
-		return shim.Error("Incorrect number of arguments. Expecting 1")
+		return shim.Error("Incorrect number of arguments. Expecting 1.")
 	}
 	key := args[0]
+	if key == KeyList {
+		return shim.Error(fmt.Sprintf("Invalid key {%s} is preseved.", KeyList))
+	}
 	if len(key) == 0 {
-		return shim.Error("Invalid key, expecting non-empty string")
+		return shim.Error("Invalid key, expecting non-empty string.")
 	}
 	value, err := stub.GetState(key)
 	if err != nil {
@@ -115,15 +155,42 @@ func (t *SimpleChaincode) keySearch(stub shim.ChaincodeStubInterface, args []str
 	return shim.Success(value)
 }
 
+func equals(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, v := range a {
+		if b[i] != v {
+			return false
+		}
+	}
+	return true
+}
+
 func (t *SimpleChaincode) valueSearch(stub shim.ChaincodeStubInterface, args []string) pb.Response {
 	if len(args) != 1 {
-		return shim.Error("Incorrect number of arguments. Expecting 1")
+		return shim.Error("Incorrect number of arguments. Expecting 1.")
 	}
-	key := args[0]
-	if len(key) == 0 {
-		return shim.Error("Invalid key, expecting non-empty string")
+	keyMap, err := t.keys(stub)
+	if err != nil {
+		return shim.Error(err.Error())
 	}
-	return shim.Error("not impl.")
+	targetValue := []byte(args[0])
+	keys := make([]string, 0)
+	for key := range keyMap {
+		value, err := stub.GetState(key)
+		if err != nil {
+			return shim.Error(err.Error())
+		}
+		if equals(value, targetValue) {
+			keys = append(keys, key)
+		}
+	}
+	keysBytes, err := json.Marshal(keys)
+	if err != nil {
+		return shim.Error(err.Error())
+	}
+	return shim.Success(keysBytes)
 }
 
 // Transaction makes payment of X units from A to B
