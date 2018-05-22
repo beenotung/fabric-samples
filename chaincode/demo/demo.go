@@ -37,37 +37,12 @@ type SimpleChaincode struct {
 func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface) pb.Response {
 	fmt.Println("ex02 Init")
 	_, args := stub.GetFunctionAndParameters()
-	var A, B string    // Entities
-	var Aval, Bval int // Asset holdings
-	var err error
 
-	if len(args) != 4 {
-		return shim.Error("Incorrect number of arguments. Expecting 4")
+	if len(args) != 0 {
+		return shim.Error("Incorrect number of arguments. Expecting no arguments.")
 	}
 
-	// Initialize the chaincode
-	A = args[0]
-	Aval, err = strconv.Atoi(args[1])
-	if err != nil {
-		return shim.Error("Expecting integer value for asset holding")
-	}
-	B = args[2]
-	Bval, err = strconv.Atoi(args[3])
-	if err != nil {
-		return shim.Error("Expecting integer value for asset holding")
-	}
-	fmt.Printf("Aval = %d, Bval = %d\n", Aval, Bval)
-
-	// Write the state to the ledger
-	err = stub.PutState(A, []byte(strconv.Itoa(Aval)))
-	if err != nil {
-		return shim.Error(err.Error())
-	}
-
-	err = stub.PutState(B, []byte(strconv.Itoa(Bval)))
-	if err != nil {
-		return shim.Error(err.Error())
-	}
+	fmt.Printf("Created New Key-Value Map.\n")
 
 	return shim.Success(nil)
 }
@@ -75,18 +50,80 @@ func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface) pb.Response {
 func (t *SimpleChaincode) Invoke(stub shim.ChaincodeStubInterface) pb.Response {
 	fmt.Println("ex02 Invoke")
 	function, args := stub.GetFunctionAndParameters()
-	if function == "invoke" {
-		// Make payment of X units from A to B
-		return t.invoke(stub, args)
-	} else if function == "delete" {
-		// Deletes an entity from its state
-		return t.delete(stub, args)
-	} else if function == "query" {
-		// the old "Query" is now implemtned in invoke
-		return t.query(stub, args)
+	if function == "insert" {
+		return t.insert(stub, args)
+	} else if function == "update" {
+		return t.update(stub, args)
+	} else if function == "key_search" {
+		return t.keySearch(stub, args)
+	} else if function == "value_search" {
+		return t.valueSearch(stub, args)
 	}
 
-	return shim.Error("Invalid invoke function name. Expecting \"invoke\" \"delete\" \"query\"")
+	return shim.Error("Invalid invoke function name. Expecting {insert, update, key_search, value_search}.")
+}
+
+func (t *SimpleChaincode) insert(stub shim.ChaincodeStubInterface, args []string) pb.Response {
+	if len(args) != 2 {
+		return shim.Error("Incorrect number of arguments. Expecting 2")
+	}
+	key := args[0]
+	if len(key) == 0 {
+		return shim.Error("Invalid key, expecting non-empty string")
+	}
+	oldValue, err := stub.GetState(key)
+	if err != nil {
+		return shim.Error(err.Error())
+	}
+	newValue := args[1]
+	value := append(oldValue, ";"+newValue...)
+	err = stub.PutState(key, value)
+	if err != nil {
+		return shim.Error(err.Error())
+	}
+	return shim.Success(nil)
+}
+
+func (t *SimpleChaincode) update(stub shim.ChaincodeStubInterface, args []string) pb.Response {
+	if len(args) != 2 {
+		return shim.Error("Incorrect number of arguments. Expecting 2")
+	}
+	key := args[0]
+	if len(key) == 0 {
+		return shim.Error("Invalid key, expecting non-empty string")
+	}
+	value := args[1]
+	err := stub.PutState(key, []byte (value))
+	if err != nil {
+		return shim.Error(err.Error())
+	}
+	return shim.Success(nil)
+}
+
+func (t *SimpleChaincode) keySearch(stub shim.ChaincodeStubInterface, args []string) pb.Response {
+	if len(args) != 1 {
+		return shim.Error("Incorrect number of arguments. Expecting 1")
+	}
+	key := args[0]
+	if len(key) == 0 {
+		return shim.Error("Invalid key, expecting non-empty string")
+	}
+	value, err := stub.GetState(key)
+	if err != nil {
+		return shim.Error(err.Error())
+	}
+	return shim.Success(value)
+}
+
+func (t *SimpleChaincode) valueSearch(stub shim.ChaincodeStubInterface, args []string) pb.Response {
+	if len(args) != 1 {
+		return shim.Error("Incorrect number of arguments. Expecting 1")
+	}
+	key := args[0]
+	if len(key) == 0 {
+		return shim.Error("Invalid key, expecting non-empty string")
+	}
+	return shim.Error("not impl.")
 }
 
 // Transaction makes payment of X units from A to B
