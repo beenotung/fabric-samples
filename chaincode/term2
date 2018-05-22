@@ -1,0 +1,5 @@
+
+cd demo
+go build -o demo
+CORE_PEER_ADDRESS=peer:7051 CORE_CHAINCODE_ID_NAME=mycc16777:0 ./demo
+

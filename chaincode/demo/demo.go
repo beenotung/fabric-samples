@@ -38,7 +38,7 @@ type SimpleChaincode struct {
 }
 
 func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface) pb.Response {
-	fmt.Println("ex02 Init")
+	fmt.Println("exDemo Init")
 	_, args := stub.GetFunctionAndParameters()
 
 	if len(args) != 0 {
@@ -53,6 +53,7 @@ func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface) pb.Response {
 func (t *SimpleChaincode) Invoke(stub shim.ChaincodeStubInterface) pb.Response {
 	fmt.Println("ex02 Invoke")
 	function, args := stub.GetFunctionAndParameters()
+	fmt.Printf("%s(%q)\n", function, args)
 	if function == "insert" {
 		return t.insert(stub, args)
 	} else if function == "update" {
@@ -118,7 +119,13 @@ func (t *SimpleChaincode) insert(stub shim.ChaincodeStubInterface, args []string
 		return shim.Error(err.Error())
 	}
 	newValue := args[1]
-	value := append(oldValue, ";"+newValue...)
+	var value []byte
+	if oldValue == nil || len(oldValue) == 0 {
+		value = []byte(newValue)
+	} else {
+		value = append(oldValue, ";"+newValue...)
+	}
+	fmt.Printf("new value for {%s} = {%s}\n", key, value)
 	return t.set(stub, key, value)
 }
 
@@ -134,6 +141,7 @@ func (t *SimpleChaincode) update(stub shim.ChaincodeStubInterface, args []string
 		return shim.Error("Invalid key, expecting non-empty string.")
 	}
 	value := args[1]
+	fmt.Printf("new value for {%s} = {%s}\n", key, value)
 	return t.set(stub, key, []byte(value))
 }
 
@@ -152,6 +160,7 @@ func (t *SimpleChaincode) keySearch(stub shim.ChaincodeStubInterface, args []str
 	if err != nil {
 		return shim.Error(err.Error())
 	}
+	fmt.Printf("value of {%s} = {%s}\n", key, value)
 	return shim.Success(value)
 }
 
@@ -175,17 +184,19 @@ func (t *SimpleChaincode) valueSearch(stub shim.ChaincodeStubInterface, args []s
 	if err != nil {
 		return shim.Error(err.Error())
 	}
-	targetValue := []byte(args[0])
+	targetValue := args[0]
+	targetValueBytes := []byte(targetValue)
 	keys := make([]string, 0)
 	for key := range keyMap {
 		value, err := stub.GetState(key)
 		if err != nil {
 			return shim.Error(err.Error())
 		}
-		if equals(value, targetValue) {
+		if equals(value, targetValueBytes) {
 			keys = append(keys, key)
 		}
 	}
+	fmt.Printf("keys of {%s} = %q\n", targetValue, keys)
 	keysBytes, err := json.Marshal(keys)
 	if err != nil {
 		return shim.Error(err.Error())
