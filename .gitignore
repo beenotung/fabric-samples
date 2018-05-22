@@ -32,3 +32,7 @@ balance-transfer/.DS_Store
 balance-transfer/node_modules/*
 balance-transfer/package-lock.json
 balance-transfer/fabric-client-kv-org*
+
+# demo
+chaincode/demo/demo
+demo/myc.block
