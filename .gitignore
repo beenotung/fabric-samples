@@ -36,3 +36,5 @@ balance-transfer/fabric-client-kv-org*
 # demo
 chaincode/demo/demo
 demo/myc.block
+chaincode/data-sharing/data-sharing
+data-sharing/myc.block

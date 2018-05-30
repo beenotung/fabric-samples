@@ -51,7 +51,7 @@ func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface) pb.Response {
 }
 
 func (t *SimpleChaincode) Invoke(stub shim.ChaincodeStubInterface) pb.Response {
-	fmt.Println("ex02 Invoke")
+	fmt.Println("demo Invoke")
 	function, args := stub.GetFunctionAndParameters()
 	fmt.Printf("%s(%q)\n", function, args)
 	if function == "insert" {

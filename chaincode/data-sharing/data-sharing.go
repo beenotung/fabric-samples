@@ -24,20 +24,62 @@ package main
 
 import (
 	"fmt"
-	"strconv"
-
 	"github.com/hyperledger/fabric/core/chaincode/shim"
 	pb "github.com/hyperledger/fabric/protos/peer"
 	"encoding/json"
+	"time"
+	"github.com/shomali11/util/xhashes"
 )
 
 const KeyList = "_KEY_LIST_"
+
+var OK = []byte("OK")
 
 // SimpleChaincode example simple Chaincode implementation
 type SimpleChaincode struct {
 }
 
+const (
+	DataType_       = iota // make it start from 1
+	DataTypePublish = iota
+	DataTypeRequest = iota
+	DataTypeReply   = iota
+)
+
+// util types
+type User struct {
+	Name string `json:"name"`
+}
+type MultiHash struct {
+	Method string `json:"method"`
+	Digest string `json:"digest"`
+}
+
+// general container
+type DataContainer struct {
+	Type int
+	TxId string
+	Data interface{}
+}
+
+// data types
+type DataPublish struct {
+	Content []byte
+	Date    time.Time
+	Hash    MultiHash
+	Owner   User
+}
+type DataRequest struct {
+	PublishTxId string
+	Requester   User
+}
+type DataReply struct {
+	RequestTxId string
+	Answer      bool
+}
+
 func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface) pb.Response {
+	stub.GetTxID()
 	fmt.Println("exDemo Init")
 	_, args := stub.GetFunctionAndParameters()
 
@@ -45,13 +87,13 @@ func (t *SimpleChaincode) Init(stub shim.ChaincodeStubInterface) pb.Response {
 		return shim.Error("Incorrect number of arguments. Expecting no arguments.")
 	}
 
-	fmt.Printf("Created New Key-Value Map.\n")
+	fmt.Printf("Created New Data Sharing World.\n")
 
 	return shim.Success(nil)
 }
 
 func (t *SimpleChaincode) Invoke(stub shim.ChaincodeStubInterface) pb.Response {
-	fmt.Println("ex02 Invoke")
+	fmt.Println("data-sharing Invoke")
 	function, args := stub.GetFunctionAndParameters()
 	fmt.Printf("%s(%q)\n", function, args)
 	if function == "insert" {
@@ -204,106 +246,60 @@ func (t *SimpleChaincode) valueSearch(stub shim.ChaincodeStubInterface, args []s
 	return shim.Success(keysBytes)
 }
 
-// Transaction makes payment of X units from A to B
-func (t *SimpleChaincode) invoke(stub shim.ChaincodeStubInterface, args []string) pb.Response {
-	var A, B string    // Entities
-	var Aval, Bval int // Asset holdings
-	var X int          // Transaction value
-	var err error
-
-	if len(args) != 3 {
-		return shim.Error("Incorrect number of arguments. Expecting 3")
+func (t *SimpleChaincode) PublishData(stub shim.ChaincodeStubInterface, args []string) pb.Response {
+	if len(args) < 2 {
+		return shim.Error("Error: missing arguments for PublishData")
 	}
-
-	A = args[0]
-	B = args[1]
-
-	// Get the state from the ledger
-	// TODO: will be nice to have a GetAllState call to ledger
-	Avalbytes, err := stub.GetState(A)
-	if err != nil {
-		return shim.Error("Failed to get state")
+	if len(args) > 2 {
+		return shim.Error("Error: too mush arguments for PublishData")
 	}
-	if Avalbytes == nil {
-		return shim.Error("Entity not found")
-	}
-	Aval, _ = strconv.Atoi(string(Avalbytes))
-
-	Bvalbytes, err := stub.GetState(B)
-	if err != nil {
-		return shim.Error("Failed to get state")
-	}
-	if Bvalbytes == nil {
-		return shim.Error("Entity not found")
-	}
-	Bval, _ = strconv.Atoi(string(Bvalbytes))
-
-	// Perform the execution
-	X, err = strconv.Atoi(args[2])
-	if err != nil {
-		return shim.Error("Invalid transaction amount, expecting a integer value")
-	}
-	Aval = Aval - X
-	Bval = Bval + X
-	fmt.Printf("Aval = %d, Bval = %d\n", Aval, Bval)
-
-	// Write the state back to the ledger
-	err = stub.PutState(A, []byte(strconv.Itoa(Aval)))
+	owner := User{}
+	err := json.Unmarshal([]byte(args[1]), &owner)
 	if err != nil {
 		return shim.Error(err.Error())
 	}
-
-	err = stub.PutState(B, []byte(strconv.Itoa(Bval)))
+	data := DataPublish{
+		Content: []byte( args[0]),
+		Date:    time.Now(),
+		Owner:   owner,
+	}
+	bs, err := json.Marshal(data)
 	if err != nil {
 		return shim.Error(err.Error())
 	}
-
-	return shim.Success(nil)
-}
-
-// Deletes an entity from state
-func (t *SimpleChaincode) delete(stub shim.ChaincodeStubInterface, args []string) pb.Response {
-	if len(args) != 1 {
-		return shim.Error("Incorrect number of arguments. Expecting 1")
+	hash := xhashes.SHA256(string(bs))
+	data.Hash = MultiHash{Method: "sha256", Digest: hash}
+	txId := stub.GetTxID()
+	container := DataContainer{
+		Type: DataTypePublish,
+		TxId: txId,
+		Data: data,
 	}
-
-	A := args[0]
-
-	// Delete the key from the state in ledger
-	err := stub.DelState(A)
+	bs, err = json.Marshal(container)
 	if err != nil {
-		return shim.Error("Failed to delete state")
+		return shim.Error(err.Error())
 	}
-
-	return shim.Success(nil)
-}
-
-// query callback representing the query of a chaincode
-func (t *SimpleChaincode) query(stub shim.ChaincodeStubInterface, args []string) pb.Response {
-	var A string // Entities
-	var err error
-
-	if len(args) != 1 {
-		return shim.Error("Incorrect number of arguments. Expecting name of the person to query")
-	}
-
-	A = args[0]
-
-	// Get the state from the ledger
-	Avalbytes, err := stub.GetState(A)
+	// TODO update index
+	err = stub.PutState(txId, bs)
 	if err != nil {
-		jsonResp := "{\"Error\":\"Failed to get state for " + A + "\"}"
-		return shim.Error(jsonResp)
+		return shim.Error(err.Error())
 	}
-
-	if Avalbytes == nil {
-		jsonResp := "{\"Error\":\"Nil amount for " + A + "\"}"
-		return shim.Error(jsonResp)
-	}
-
-	jsonResp := "{\"Name\":\"" + A + "\",\"Amount\":\"" + string(Avalbytes) + "\"}"
-	fmt.Printf("Query Response:%s\n", jsonResp)
-	return shim.Success(Avalbytes)
+	return shim.Success(OK)
+}
+func (t *SimpleChaincode) ShowMetaData(stub shim.ChaincodeStubInterface, args []string) pb.Response {
+	return shim.Error("not impl")
+}
+func (t *SimpleChaincode) ShowPendingRequest(stub shim.ChaincodeStubInterface, args []string) pb.Response {
+	return shim.Error("not impl")
+}
+func (t *SimpleChaincode) HandleRequest(stub shim.ChaincodeStubInterface, args []string) pb.Response {
+	return shim.Error("not impl")
+}
+func (t *SimpleChaincode) ShowInfoAboutData(stub shim.ChaincodeStubInterface, args []string) pb.Response {
+	return shim.Error("not impl")
+}
+func (t *SimpleChaincode) RequestData(stub shim.ChaincodeStubInterface, args []string) pb.Response {
+	return shim.Error("not impl")
 }
 
 func main() {
