@@ -1,0 +1,38 @@
+#!/bin/bash
+set -e
+set -o pipefail
+
+# setup
+peer chaincode install -p chaincodedev/chaincode/data-sharing -n mycc -v 0
+sleep 5
+peer chaincode instantiate -n mycc -v 0 -c '{"Args":[]}' -C myc
+sleep 5
+
+# insert
+peer chaincode invoke -n mycc -c '{"Args":["key_search","a"]}' -C myc
+sleep 2
+peer chaincode invoke -n mycc -c '{"Args":["insert","a","10"]}' -C myc
+sleep 2
+peer chaincode invoke -n mycc -c '{"Args":["key_search","a"]}' -C myc
+sleep 2
+peer chaincode invoke -n mycc -c '{"Args":["insert","a","20"]}' -C myc
+sleep 2
+peer chaincode invoke -n mycc -c '{"Args":["key_search","a"]}' -C myc
+sleep 2
+
+# update
+peer chaincode invoke -n mycc -c '{"Args":["update","a","30"]}' -C myc
+sleep 2
+peer chaincode invoke -n mycc -c '{"Args":["key_search","a"]}' -C myc
+sleep 2
+
+# value search
+peer chaincode invoke -n mycc -c '{"Args":["update","b","30"]}' -C myc
+sleep 2
+peer chaincode invoke -n mycc -c '{"Args":["update","c","30"]}' -C myc
+sleep 2
+peer chaincode invoke -n mycc -c '{"Args":["value_search","30"]}' -C myc
+sleep 2
+
+#peer chaincode query -n mycc -c '{"Args":["query","a"]}' -C myc
+

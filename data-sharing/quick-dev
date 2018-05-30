@@ -1,0 +1,38 @@
+#!/bin/bash
+set -e
+set -o pipefail
+
+fork () {
+  terminator -x "$@;read -p 'Press [Enter] to exit...'" &
+}
+
+# Term 1
+if [ -f .up ]; then
+  touch .up
+  fork "docker-compose -f docker-compose-simple.yaml up; rm .up"
+  read -p "Press [Enter] to continue..."
+fi
+
+name="mycc$RANDOM"
+echo "smart contract name = $name"
+
+# Term 2
+code="""
+cd data-sharing
+go build -o data-sharing
+CORE_PEER_ADDRESS=peer:7051 CORE_CHAINCODE_ID_NAME=$name:0 ./data-sharing
+"""
+echo "$code" > ./../chaincode/term2
+chmod +x ./../chaincode/term2
+echo "Please manually run './term2' in the shell"
+echo "./term2" | xclip
+fork docker exec -it chaincode bash
+
+read -p "Press [Enter] to continue..."
+
+# Term 3
+sed "s/mycc/$name/g" template-term3 > term3
+chmod +x term3
+echo "Please manually run './term3' in the shell"
+echo "./term3" | xclip
+fork docker exec -it cli bash

@@ -1,0 +1,62 @@
+#!/bin/bash
+set -e
+set -o pipefail
+
+fork () {
+  terminator -x "$@;read -p 'Press [Enter] to exit...'" &
+}
+
+# Setup Env
+if [ ! -f .setup ]; then
+  sudo pacman -S --needed docker docker-compose terminator
+  pwd="$PWD"
+  cd $(go env GOPATH)
+  mkdir -p src/github.com/hyperledger
+  cd src/github.com/hyperledger
+  if [ ! -d fabric ]; then
+    git clone --depth 2 https://github.com/hyperledger/fabric
+  fi
+  cd "$pwd"
+  bash ./../scripts/fabric-preload.sh
+  touch .setup
+fi
+set -e
+systemctl status --no-pager docker
+if [ $? != 0 ]; then
+  sudo systemctl start docker
+fi
+set +e
+
+# Clean up
+list=$(docker ps -a -q)
+if [ "$list" != "" ]; then
+  docker rm ${list}
+fi
+
+# Term 1
+fork docker-compose -f docker-compose-simple.yaml up
+read -p "Press [Enter] to continue..."
+
+name="mycc"
+echo "smart contract name = $name"
+
+# Term 2
+code="""
+cd data-sharing
+go build -o data-sharing
+CORE_PEER_ADDRESS=peer:7051 CORE_CHAINCODE_ID_NAME=$name:0 ./data-sharing
+"""
+echo "$code" > ./../chaincode/term2
+chmod +x ./../chaincode/term2
+echo "Please manually run './term2' in the shell"
+echo "./term2" | xclip
+fork docker exec -it chaincode bash
+
+read -p "Press [Enter] to continue..."
+
+# Term 3
+sed "s/mycc/$name/g" template-term3 > term3
+chmod +x term3
+echo "Please manually run './term3' in the shell"
+echo "./term3" | xclip
+fork docker exec -it cli bash
