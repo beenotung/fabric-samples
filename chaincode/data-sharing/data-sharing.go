@@ -28,7 +28,8 @@ import (
 	pb "github.com/hyperledger/fabric/protos/peer"
 	"encoding/json"
 	"time"
-	"github.com/shomali11/util/xhashes"
+	"crypto/sha256"
+	"encoding/hex"
 )
 
 const KeyList = "_KEY_LIST_"
@@ -263,24 +264,19 @@ func (t *SimpleChaincode) PublishData(stub shim.ChaincodeStubInterface, args []s
 		Date:    time.Now(),
 		Owner:   owner,
 	}
-	bs, err := json.Marshal(data)
+	hash, err := t.Hash(data)
 	if err != nil {
 		return shim.Error(err.Error())
 	}
-	hash := xhashes.SHA256(string(bs))
-	data.Hash = MultiHash{Method: "sha256", Digest: hash}
+	data.Hash = hash
 	txId := stub.GetTxID()
 	container := DataContainer{
 		Type: DataTypePublish,
 		TxId: txId,
 		Data: data,
 	}
-	bs, err = json.Marshal(container)
-	if err != nil {
-		return shim.Error(err.Error())
-	}
 	// TODO update index
-	err = stub.PutState(txId, bs)
+	err = t.PutState(stub, txId, container)
 	if err != nil {
 		return shim.Error(err.Error())
 	}
@@ -300,6 +296,31 @@ func (t *SimpleChaincode) ShowInfoAboutData(stub shim.ChaincodeStubInterface, ar
 }
 func (t *SimpleChaincode) RequestData(stub shim.ChaincodeStubInterface, args []string) pb.Response {
 	return shim.Error("not impl")
+}
+
+func (t *SimpleChaincode) Hash(data interface{}) (hash MultiHash, err error) {
+	bs, err := json.Marshal(data)
+	if err != nil {
+		return
+	}
+	algo := sha256.New()
+	algo.Write(bs)
+	hash = MultiHash{
+		Method: "sha256",
+		Digest: hex.EncodeToString(algo.Sum(nil)),
+	}
+	return
+}
+func (t *SimpleChaincode) PutState(stub shim.ChaincodeStubInterface, key string, value interface{}) error {
+	bs, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	err = stub.PutState(key, bs)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func main() {
